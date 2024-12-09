@@ -1,21 +1,25 @@
 import 'package:json_annotation/json_annotation.dart';
 
 import 'options.dart';
-import 'resource.dart';
+import 'request.dart';
 
 part 'create_task.g.dart';
 
 @JsonSerializable(explicitToJson: true)
 class CreateTask {
-  Resource res;
-  Options? opts;
+  String? rid;
+  Request? req;
+  Options? opt;
 
   CreateTask({
-    required this.res,
-    this.opts,
+    this.rid,
+    this.req,
+    this.opt,
   });
 
-  factory CreateTask.fromJson(Map<String, dynamic> json) =>
+  factory CreateTask.fromJson(
+    Map<String, dynamic> json,
+  ) =>
       _$CreateTaskFromJson(json);
 
   Map<String, dynamic> toJson() => _$CreateTaskToJson(this);

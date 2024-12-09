@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/monkeyWie/gopeed/pkg/base"
-	"github.com/monkeyWie/gopeed/pkg/download"
-	"github.com/monkeyWie/gopeed/pkg/util"
+	"github.com/GopeedLab/gopeed/internal/fetcher"
+	"github.com/GopeedLab/gopeed/pkg/base"
+	"github.com/GopeedLab/gopeed/pkg/download"
+	"github.com/GopeedLab/gopeed/pkg/protocol/http"
+	"github.com/GopeedLab/gopeed/pkg/util"
 	"strings"
 	"sync"
 )
@@ -15,6 +17,7 @@ func main() {
 	args := parse()
 
 	var wg sync.WaitGroup
+	wg.Add(1)
 	_, err := download.Boot().
 		URL(args.url).
 		Listener(func(event *download.Event) {
@@ -39,26 +42,40 @@ func main() {
 			}
 		}).
 		Create(&base.Options{
-			Path:        *args.dir,
-			Connections: *args.connections,
+			Path:  *args.dir,
+			Extra: http.OptsExtra{Connections: *args.connections},
 		})
 	if err != nil {
 		panic(err)
 	}
-	wg.Add(1)
+	printProgress(emptyTask, "downloading...")
 	wg.Wait()
 }
 
 var (
 	lastLineLen = 0
 	sb          = new(strings.Builder)
+	emptyTask   = &download.Task{
+		Progress: &download.Progress{},
+		Meta: &fetcher.FetcherMeta{
+			Res: &base.Resource{},
+		},
+	}
 )
 
 func printProgress(task *download.Task, title string) {
-	rate := float64(task.Progress.Downloaded) / float64(task.Res.Size)
+	var rate float64
+	if task.Meta.Res == nil {
+		task = emptyTask
+	}
+	if task.Meta.Res.Size <= 0 {
+		rate = 0
+	} else {
+		rate = float64(task.Progress.Downloaded) / float64(task.Meta.Res.Size)
+	}
 	completeWidth := int(progressWidth * rate)
 	speed := util.ByteFmt(task.Progress.Speed)
-	totalSize := util.ByteFmt(task.Res.Size)
+	totalSize := util.ByteFmt(task.Meta.Res.Size)
 	sb.WriteString(fmt.Sprintf("\r%s [", title))
 	for i := 0; i < progressWidth; i++ {
 		if i < completeWidth {

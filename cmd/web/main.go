@@ -6,14 +6,12 @@ package main
 import (
 	"embed"
 	"fmt"
-	"github.com/monkeyWie/gopeed/pkg/rest"
-	"github.com/monkeyWie/gopeed/pkg/rest/model"
+	"github.com/GopeedLab/gopeed/cmd"
+	"github.com/GopeedLab/gopeed/pkg/rest/model"
 	"io/fs"
-	"net/http"
+	"os"
+	"path/filepath"
 )
-
-//go:embed banner.txt
-var banner string
 
 //go:embed dist/*
 var dist embed.FS
@@ -23,20 +21,42 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	args := parse()
+	var webBasicAuth *model.WebBasicAuth
+	if isNotBlank(args.Username) && isNotBlank(args.Password) {
+		webBasicAuth = &model.WebBasicAuth{
+			Username: *args.Username,
+			Password: *args.Password,
+		}
+	}
+
+	var dir string
+	if args.StorageDir != nil && *args.StorageDir != "" {
+		dir = *args.StorageDir
+	} else {
+		exe, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		dir = filepath.Dir(exe)
+	}
+
 	cfg := &model.StartConfig{
-		Network:   "tcp",
-		Address:   "127.0.0.1:9999",
-		Storage:   model.StorageBolt,
-		WebEnable: true,
-		WebFS:     sub,
+		Network:        "tcp",
+		Address:        fmt.Sprintf("%s:%d", *args.Address, *args.Port),
+		Storage:        model.StorageBolt,
+		StorageDir:     filepath.Join(dir, "storage"),
+		ApiToken:       *args.ApiToken,
+		DownloadConfig: args.DownloadConfig,
+		ProductionMode: true,
+		WebEnable:      true,
+		WebFS:          sub,
+		WebBasicAuth:   webBasicAuth,
 	}
-	fmt.Println(banner)
-	srv, listener, err := rest.BuildServer(cfg)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Server start success on http://%s\n", listener.Addr().String())
-	if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
-		panic(err)
-	}
+	cmd.Start(cfg)
+}
+
+func isNotBlank(str *string) bool {
+	return str != nil && *str != ""
 }

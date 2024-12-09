@@ -11,12 +11,19 @@ categories:
       - 'fix'
       - 'bugfix'
       - 'bug'
+  - title: '🔧 Performance Improvements'
+    labels:
+      - 'perf'
+  - title: '🧪 Tests'
+    label: 'test'
   - title: '🧰 Maintenance'
     label: 'chore'
   - title: '📖 Document'
-    label: 'doc'
+    label: 'docs'
   - title: '🚀 CI/CD'
     label: 'ci'
+  - title: '🌎 Internationalization'
+    label: 'translation'
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
 version-resolver:
   major:
@@ -30,6 +37,10 @@ version-resolver:
       - 'patch'
   default: patch
 template: |
-  ## Changes
+  # Release notes
+
+  $CHANGES
+  
+  # 更新日志
 
   $CHANGES
