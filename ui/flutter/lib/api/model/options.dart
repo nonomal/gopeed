@@ -2,22 +2,38 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'options.g.dart';
 
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class Options {
   String name;
   String path;
-  int connections;
   List<int> selectFiles;
+  Object? extra;
 
   Options({
-    required this.name,
-    required this.path,
-    required this.connections,
-    required this.selectFiles,
+    this.name = '',
+    this.path = '',
+    this.selectFiles = const [],
+    this.extra,
   });
 
   factory Options.fromJson(Map<String, dynamic> json) =>
       _$OptionsFromJson(json);
 
   Map<String, dynamic> toJson() => _$OptionsToJson(this);
+}
+
+@JsonSerializable()
+class OptsExtraHttp {
+  int connections;
+  bool autoTorrent;
+
+  OptsExtraHttp({
+    this.connections = 0,
+    this.autoTorrent = false,
+  });
+
+  factory OptsExtraHttp.fromJson(Map<String, dynamic> json) =>
+      _$OptsExtraHttpFromJson(json);
+
+  Map<String, dynamic> toJson() => _$OptsExtraHttpToJson(this);
 }

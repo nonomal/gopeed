@@ -4,8 +4,8 @@ package libgopeed
 import "C"
 import (
 	"encoding/json"
-	"github.com/monkeyWie/gopeed/pkg/rest"
-	"github.com/monkeyWie/gopeed/pkg/rest/model"
+	"github.com/GopeedLab/gopeed/pkg/rest"
+	"github.com/GopeedLab/gopeed/pkg/rest/model"
 )
 
 func Start(cfg string) (int, error) {
@@ -13,6 +13,7 @@ func Start(cfg string) (int, error) {
 	if err := json.Unmarshal([]byte(cfg), &config); err != nil {
 		return 0, err
 	}
+	config.ProductionMode = true
 	return rest.Start(&config)
 }
 

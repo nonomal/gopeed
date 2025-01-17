@@ -7,23 +7,37 @@ part of 'resource.dart';
 // **************************************************************************
 
 Resource _$ResourceFromJson(Map<String, dynamic> json) => Resource(
-      req: Request.fromJson(json['req'] as Map<String, dynamic>),
-      name: json['name'] as String,
-      size: json['size'] as int,
-      range: json['range'] as bool,
+      name: json['name'] as String? ?? "",
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      range: json['range'] as bool? ?? false,
       files: (json['files'] as List<dynamic>)
           .map((e) => FileInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
-      extra: json['extra'] as Map<String, dynamic>?,
+      hash: json['hash'] as String? ?? "",
     );
 
-Map<String, dynamic> _$ResourceToJson(Resource instance) {
+Map<String, dynamic> _$ResourceToJson(Resource instance) => <String, dynamic>{
+      'name': instance.name,
+      'size': instance.size,
+      'range': instance.range,
+      'files': instance.files.map((e) => e.toJson()).toList(),
+      'hash': instance.hash,
+    };
+
+FileInfo _$FileInfoFromJson(Map<String, dynamic> json) => FileInfo(
+      path: json['path'] as String? ?? "",
+      name: json['name'] as String,
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      req: json['req'] == null
+          ? null
+          : Request.fromJson(json['req'] as Map<String, dynamic>),
+    );
+
+Map<String, dynamic> _$FileInfoToJson(FileInfo instance) {
   final val = <String, dynamic>{
-    'req': instance.req.toJson(),
+    'path': instance.path,
     'name': instance.name,
     'size': instance.size,
-    'range': instance.range,
-    'files': instance.files.map((e) => e.toJson()).toList(),
   };
 
   void writeNotNull(String key, dynamic value) {
@@ -32,18 +46,6 @@ Map<String, dynamic> _$ResourceToJson(Resource instance) {
     }
   }
 
-  writeNotNull('extra', instance.extra);
+  writeNotNull('req', instance.req?.toJson());
   return val;
 }
-
-FileInfo _$FileInfoFromJson(Map<String, dynamic> json) => FileInfo(
-      name: json['name'] as String,
-      path: json['path'] as String,
-      size: json['size'] as int,
-    );
-
-Map<String, dynamic> _$FileInfoToJson(FileInfo instance) => <String, dynamic>{
-      'name': instance.name,
-      'path': instance.path,
-      'size': instance.size,
-    };

@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
-import '../ffi/libgopeed_bind.dart';
 
+import '../ffi/libgopeed_bind.dart';
 import 'libgopeed_interface.dart';
 import 'start_config.dart';
 
@@ -20,7 +20,7 @@ class LibgopeedFFi implements LibgopeedInterface {
     var completer = Completer<int>();
     var result = _libgopeed.Start(jsonEncode(cfg).toNativeUtf8().cast());
     if (result.r1 != nullptr) {
-      completer.completeError(result.r1.cast<Utf8>().toDartString());
+      completer.completeError(Exception(result.r1.cast<Utf8>().toDartString()));
     } else {
       completer.complete(result.r0);
     }

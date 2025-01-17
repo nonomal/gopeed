@@ -1,6 +1,10 @@
 package model
 
-import "io/fs"
+import (
+	"encoding/base64"
+	"github.com/GopeedLab/gopeed/pkg/base"
+	"io/fs"
+)
 
 type Storage string
 
@@ -10,19 +14,31 @@ const (
 )
 
 type StartConfig struct {
-	Network         string  `json:"network"`
-	Address         string  `json:"address"`
-	Storage         Storage `json:"storage"`
-	StorageDir      string  `json:"storageDir"`
-	RefreshInterval int     `json:"refreshInterval"`
+	Network           string                      `json:"network"`
+	Address           string                      `json:"address"`
+	RefreshInterval   int                         `json:"refreshInterval"`
+	Storage           Storage                     `json:"storage"`
+	StorageDir        string                      `json:"storageDir"`
+	WhiteDownloadDirs []string                    `json:"whiteDownloadDirs"`
+	ApiToken          string                      `json:"apiToken"`
+	DownloadConfig    *base.DownloaderStoreConfig `json:"downloadConfig"`
 
-	WebEnable bool
-	WebFS     fs.FS
+	ProductionMode bool
+
+	WebEnable    bool
+	WebFS        fs.FS
+	WebBasicAuth *WebBasicAuth
 }
 
 func (cfg *StartConfig) Init() *StartConfig {
 	if cfg.Network == "" {
 		cfg.Network = "tcp"
+	}
+	if cfg.Address == "" {
+		cfg.Address = "127.0.0.1:0"
+	}
+	if cfg.RefreshInterval == 0 {
+		cfg.RefreshInterval = 350
 	}
 	if cfg.Storage == "" {
 		cfg.Storage = StorageBolt
@@ -33,26 +49,13 @@ func (cfg *StartConfig) Init() *StartConfig {
 	return cfg
 }
 
-// ServerConfig is present in the database
-type ServerConfig struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-
-	Connections int    `json:"connections"`
-	DownloadDir string `json:"downloadDir"`
-
-	Extra map[string]any `json:"extra"`
+type WebBasicAuth struct {
+	Username string
+	Password string
 }
 
-func (cfg *ServerConfig) Init() *ServerConfig {
-	if cfg.Host == "" {
-		cfg.Host = "127.0.0.1"
-	}
-	if cfg.Port < 0 {
-		cfg.Port = 0
-	}
-	if cfg.Connections <= 0 {
-		cfg.Connections = 16
-	}
-	return cfg
+// Authorization returns the value of the Authorization header to be used in HTTP requests.
+func (cfg *WebBasicAuth) Authorization() string {
+	userId := cfg.Username + ":" + cfg.Password
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(userId))
 }

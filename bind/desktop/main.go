@@ -3,8 +3,8 @@ package main
 import "C"
 import (
 	"encoding/json"
-	"github.com/monkeyWie/gopeed/pkg/rest"
-	"github.com/monkeyWie/gopeed/pkg/rest/model"
+	"github.com/GopeedLab/gopeed/pkg/rest"
+	"github.com/GopeedLab/gopeed/pkg/rest/model"
 )
 
 func main() {}
@@ -15,6 +15,7 @@ func Start(cfg *C.char) (int, *C.char) {
 	if err := json.Unmarshal([]byte(C.GoString(cfg)), &config); err != nil {
 		return 0, C.CString(err.Error())
 	}
+	config.ProductionMode = true
 	realPort, err := rest.Start(&config)
 	if err != nil {
 		return 0, C.CString(err.Error())

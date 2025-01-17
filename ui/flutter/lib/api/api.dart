@@ -1,17 +1,21 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/adapter.dart';
 import 'package:dio/dio.dart';
-import 'package:gopeed/util/util.dart';
+import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart';
+import 'package:gopeed/api/model/extension.dart';
+import 'package:gopeed/api/model/install_extension.dart';
+import 'package:gopeed/api/model/switch_extension.dart';
+
+import '../util/util.dart';
 import 'model/create_task.dart';
+import 'model/downloader_config.dart';
 import 'model/request.dart';
-import 'model/resource.dart';
+import 'model/resolve_result.dart';
 import 'model/result.dart';
 import 'model/task.dart';
-
-import '../core/libgopeed_boot.dart';
-import 'model/server_config.dart';
+import 'model/update_extension_settings.dart';
+import 'model/update_check_extension_resp.dart';
 
 class _Client {
   static _Client? _instance;
@@ -20,25 +24,40 @@ class _Client {
 
   _Client._internal();
 
-  factory _Client() {
+  factory _Client(String network, String address, String apiToken) {
     if (_instance == null) {
       _instance = _Client._internal();
       var dio = Dio();
-      final isUnixSocket = LibgopeedBoot.instance.config.network == 'unix';
-      dio.options.baseUrl = isUnixSocket
-          ? 'http://127.0.0.1'
-          : (Util.isWeb()
-              ? ""
-              : 'http://${LibgopeedBoot.instance.config.address}');
+      final isUnixSocket = network == 'unix';
+      var baseUrl = 'http://127.0.0.1';
+      if (!isUnixSocket) {
+        if (Util.isWeb()) {
+          baseUrl = kDebugMode ? 'http://127.0.0.1:9999' : '';
+        } else {
+          baseUrl = 'http://$address';
+        }
+      }
+      dio.options.baseUrl = baseUrl;
+      dio.options.contentType = Headers.jsonContentType;
+      dio.options.sendTimeout = const Duration(seconds: 5);
+      dio.options.connectTimeout = const Duration(seconds: 5);
+      dio.options.receiveTimeout = const Duration(seconds: 60);
+      dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+        if (apiToken.isNotEmpty) {
+          options.headers['X-Api-Token'] = apiToken;
+        }
+        handler.next(options);
+      }));
+
       _instance!.dio = dio;
       if (isUnixSocket) {
-        (_instance!.dio.httpClientAdapter as DefaultHttpClientAdapter)
-            .onHttpClientCreate = (client) {
+        (_instance!.dio.httpClientAdapter as IOHttpClientAdapter)
+            .createHttpClient = () {
+          final client = HttpClient();
           client.connectionFactory =
               (Uri uri, String? proxyHost, int? proxyPort) {
-            var address = InternetAddress(LibgopeedBoot.instance.config.address,
-                type: InternetAddressType.unix);
-            return Socket.startConnect(address, 0);
+            return Socket.startConnect(
+                InternetAddress(address, type: InternetAddressType.unix), 0);
           };
           return client;
         };
@@ -48,7 +67,17 @@ class _Client {
   }
 }
 
-var _client = _Client();
+class TimeoutException implements Exception {
+  final String message;
+
+  TimeoutException(this.message);
+}
+
+late _Client _client;
+
+void init(String network, String address, String apiToken) {
+  _client = _Client(network, address, apiToken);
+}
 
 Future<T> _parse<T>(
   Future<Response> Function() fetch,
@@ -56,28 +85,30 @@ Future<T> _parse<T>(
 ) async {
   try {
     var resp = await fetch();
-    if (fromJsonT != null) {
-      return Result<T>.fromJson(jsonDecode(resp.data), fromJsonT).data as T;
+    fromJsonT ??= (json) => null as T;
+    final result = Result<T>.fromJson(resp.data, fromJsonT);
+    if (result.code == 0) {
+      return result.data as T;
     } else {
-      return null as T;
+      throw Exception(result);
     }
-  } on DioError catch (e) {
-    if (e.response == null) {
-      throw Exception("Server error");
+  } on DioException catch (e) {
+    if (e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionTimeout) {
+      throw TimeoutException("request timeout");
     }
-    throw Exception(
-        Result.fromJson(jsonDecode(e.response?.data), (_) => null).msg);
+    throw Exception(Result(code: 1000, msg: e.message));
   }
 }
 
-Future<Resource> resolve(Request request) async {
-  return _parse<Resource>(
+Future<ResolveResult> resolve(Request request) async {
+  return _parse<ResolveResult>(
       () => _client.dio.post("/api/v1/resolve", data: request),
-      (data) => Resource.fromJson(data));
+      (data) => ResolveResult.fromJson(data));
 }
 
 Future<String> createTask(CreateTask createTask) async {
-  print(jsonEncode(createTask));
   return _parse<String>(
       () => _client.dio.post("/api/v1/tasks", data: createTask),
       (data) => data as String);
@@ -85,8 +116,8 @@ Future<String> createTask(CreateTask createTask) async {
 
 Future<List<Task>> getTasks(List<Status> statuses) async {
   return _parse<List<Task>>(
-      () => _client.dio
-          .get("/api/v1/tasks?status=${statuses.map((e) => e.name).join(",")}"),
+      () => _client.dio.get(
+          "/api/v1/tasks?${statuses.map((e) => "status=${e.name}").join("&")}"),
       (data) => (data as List).map((e) => Task.fromJson(e)).toList());
 }
 
@@ -98,16 +129,99 @@ Future<void> continueTask(String id) async {
   return _parse(() => _client.dio.put("/api/v1/tasks/$id/continue"), null);
 }
 
+Future<void> pauseAllTasks(List<String>? ids) async {
+  return _parse(
+      () => _client.dio.put("/api/v1/tasks/pause", queryParameters: {
+            "id": ids,
+          }),
+      null);
+}
+
+Future<void> continueAllTasks(List<String>? ids) async {
+  return _parse(
+      () => _client.dio.put("/api/v1/tasks/continue", queryParameters: {
+            "id": ids,
+          }),
+      null);
+}
+
 Future<void> deleteTask(String id, bool force) async {
   return _parse(
       () => _client.dio.delete("/api/v1/tasks/$id?force=$force"), null);
 }
 
-Future<ServerConfig> getConfig() async {
-  return _parse(() => _client.dio.get("/api/v1/config"),
-      (data) => ServerConfig.fromJson(data));
+Future<void> deleteTasks(List<String>? ids, bool force) async {
+  return _parse(
+      () => _client.dio.delete("/api/v1/tasks", queryParameters: {
+            "id": ids,
+            "force": force,
+          }),
+      null);
 }
 
-Future<void> putConfig(ServerConfig config) async {
+Future<DownloaderConfig> getConfig() async {
+  return _parse(() => _client.dio.get("/api/v1/config"),
+      (data) => DownloaderConfig.fromJson(data));
+}
+
+Future<void> putConfig(DownloaderConfig config) async {
   return _parse(() => _client.dio.put("/api/v1/config", data: config), null);
+}
+
+Future<void> installExtension(InstallExtension installExtension) async {
+  return _parse(
+      () => _client.dio.post("/api/v1/extensions", data: installExtension),
+      null);
+}
+
+Future<List<Extension>> getExtensions() async {
+  return _parse<List<Extension>>(() => _client.dio.get("/api/v1/extensions"),
+      (data) => (data as List).map((e) => Extension.fromJson(e)).toList());
+}
+
+Future<void> updateExtensionSettings(
+    String identity, UpdateExtensionSettings updateExtensionSettings) async {
+  return _parse(
+      () => _client.dio.put("/api/v1/extensions/$identity/settings",
+          data: updateExtensionSettings),
+      null);
+}
+
+Future<void> switchExtension(
+    String identity, SwitchExtension switchExtension) async {
+  return _parse(
+      () => _client.dio
+          .put("/api/v1/extensions/$identity/switch", data: switchExtension),
+      null);
+}
+
+Future<void> deleteExtension(String identity) async {
+  return _parse(() => _client.dio.delete("/api/v1/extensions/$identity"), null);
+}
+
+Future<UpdateCheckExtensionResp> upgradeCheckExtension(String identity) async {
+  return _parse(() => _client.dio.get("/api/v1/extensions/$identity/update"),
+      (data) => UpdateCheckExtensionResp.fromJson(data));
+}
+
+Future<void> updateExtension(String identity) async {
+  return _parse(
+      () => _client.dio.post("/api/v1/extensions/$identity/update"), null);
+}
+
+Future<Response<String>> proxyRequest<T>(String uri,
+    {data, Options? options}) async {
+  options ??= Options();
+  options.headers ??= {};
+  options.headers!["X-Target-Uri"] = uri;
+
+  // add timestamp to avoid cache
+  return _client.dio.request(
+      "/api/v1/proxy?t=${DateTime.now().millisecondsSinceEpoch}",
+      data: data,
+      options: options);
+}
+
+String join(String path) {
+  return "${_client.dio.options.baseUrl}/${Util.cleanPath(path)}";
 }

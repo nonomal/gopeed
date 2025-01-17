@@ -1,30 +1,42 @@
 package controller
 
 import (
-	"errors"
+	"github.com/GopeedLab/gopeed/pkg/base"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 )
 
-type Controller interface {
-	Touch(name string, size int64) (file *os.File, err error)
+type Controller struct {
+	GetConfig func(v any)
+	GetProxy  func(requestProxy *base.RequestProxy) func(*http.Request) (*url.URL, error)
+	FileController
 	//ContextDialer() (proxy.Dialer, error)
 }
 
-type DefaultController struct {
+type FileController interface {
+	Touch(name string, size int64) (file *os.File, err error)
 }
 
-func NewController() *DefaultController {
-	return &DefaultController{}
+type DefaultFileController struct {
 }
 
-func (c *DefaultController) Touch(name string, size int64) (file *os.File, err error) {
+func NewController() *Controller {
+	return &Controller{
+		GetConfig:      func(v any) {},
+		GetProxy:       func(requestProxy *base.RequestProxy) func(*http.Request) (*url.URL, error) { return nil },
+		FileController: &DefaultFileController{},
+	}
+}
+
+func (c *DefaultFileController) Touch(name string, size int64) (file *os.File, err error) {
 	dir := filepath.Dir(name)
 	if err = os.MkdirAll(dir, os.ModePerm); err != nil {
 		return
 	}
 	file, err = os.Create(name)
-	if err != nil && !errors.Is(err, os.ErrExist) {
+	if err != nil {
 		return
 	}
 	if size > 0 {
